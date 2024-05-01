@@ -25,6 +25,7 @@ class YearMonthDate:
     def __init__(self, db_path):
         self.db_path = db_path
         self.load_db(db_path)
+        self.counter = 1
 
     def load_db(self, db_path):
         dir_lst = sorted(list(glob(os.path.join(db_path, "*"))), key= lambda abs_path: -int(abs_path.split("/")[-1]))
@@ -38,11 +39,9 @@ class YearMonthDate:
             for n in range(int((end_date - start_date).days)):
                 yield start_date + timedelta(n)
 
-        counter = 0
         for single_date in tqdm(daterange(start_date, end_date)):
             self.request(single_date.year, single_date.month, single_date.day)
-            counter += 1
-            if counter % 300 == 0:
+            if self.counter % 600 == 0:
                 self.save_parquet()
 
         self.save_parquet()
@@ -64,7 +63,8 @@ class YearMonthDate:
             return
 
         if len(res.index) == 0:
-            self.update_db(y, m, d)
+            res = self.update_db(y, m, d)
+        return res
 
     def update_db(self, y, m, d):
         params = {'solYear': str(y),
@@ -101,15 +101,18 @@ class YearMonthDate:
             new_row["solWeek"] = item.find("solWeek").text
 
         self.df = pd.concat([self.df, pd.DataFrame([new_row])], ignore_index=True)
+        self.counter += 1
         return self.df.loc[(self.df["y"] == y) & (self.df["m"] == m) & (self.df["d"] == d)]
 
 
 if __name__ == "__main__":
     db_path = "/Users/jack/PycharmProjects/saju/resources/ymd/"
     ymd = YearMonthDate(db_path)
-    start_date = date(1970, 1, 1)
-    end_date = date(2010, 12, 31)
-    ymd.dump_db(start_date, end_date)
+    res = ymd.request(1990, 1, 1)
+    print(res)
+    # start_date = date(1970, 1, 1)
+    # end_date = date(2010, 12, 31)
+    # ymd.dump_db(start_date, end_date)
 
 
 
