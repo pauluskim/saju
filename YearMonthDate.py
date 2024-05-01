@@ -1,38 +1,26 @@
 import logging
-import os
-import pathlib
-from glob import glob
 
 import pandas as pd
 import xml.etree.ElementTree as ET
 
-from datetime import date, timedelta, datetime
+from datetime import timedelta, datetime
+from pytz import timezone
 
 import requests
 from tqdm import tqdm
+
+from DatabaseManager import DatabaseManager
 
 
 class ApiError(Exception):
     pass
 
-class YearMonthDate:
+class YearMonthDate(DatabaseManager):
     df = pd.DataFrame(columns=
                       ["y", "m", "d", "lunYear", "lunMonth", "lunDay", "lunIljin", "lunLeapmonth", "lunNday",
                        "lunSecha", "lunWolgeon", "solYear", "solMonth", "solDay", "solJd", "solLeapyear",
                        "solWeek"])
     api_url = "http://apis.data.go.kr/B090041/openapi/service/LrsrCldInfoService/getLunCalInfo?"
-
-    def __init__(self, db_path):
-        self.db_path = db_path
-        self.load_db(db_path)
-        self.counter = 1
-
-    def load_db(self, db_path):
-        dir_lst = sorted(list(glob(os.path.join(db_path, "*"))), key= lambda abs_path: -int(abs_path.split("/")[-1]))
-        for dir in dir_lst:
-            if pathlib.Path(os.path.join(dir, "_SUCCESS_")).is_file():
-                self.df = pd.read_parquet(os.path.join(dir, "db.parquet"), engine='pyarrow')
-                break
 
     def dump_db(self, start_date, end_date):
         def daterange(start_date, end_date):
@@ -41,17 +29,11 @@ class YearMonthDate:
 
         for single_date in tqdm(daterange(start_date, end_date)):
             self.request(single_date.year, single_date.month, single_date.day)
-            if self.counter % 600 == 0:
+            if datetime.now(timezone(self.TIMEZONE)) - self.latest_time > self.save_db_period:
                 self.save_parquet()
 
         self.save_parquet()
 
-    def save_parquet(self):
-        now = datetime.now().strftime("%Y%m%d%H%M")
-        output_path = os.path.join(self.db_path, now)
-        os.mkdir(output_path)
-        self.df.to_parquet(os.path.join(output_path, "db.parquet"))
-        pathlib.Path(os.path.join(output_path, "_SUCCESS_")).touch()
     def request(self, y, m, d):
         try:
             res = self.df.loc[(self.df["y"] == y) & (self.df["m"] == m) & (self.df["d"] == d)]
@@ -101,15 +83,18 @@ class YearMonthDate:
             new_row["solWeek"] = item.find("solWeek").text
 
         self.df = pd.concat([self.df, pd.DataFrame([new_row])], ignore_index=True)
-        self.counter += 1
+        if datetime.now(timezone(self.TIMEZONE)) - self.latest_time > self.save_db_period:
+            self.save_parquet()
+
         return self.df.loc[(self.df["y"] == y) & (self.df["m"] == m) & (self.df["d"] == d)]
 
 
 if __name__ == "__main__":
     db_path = "/Users/jack/PycharmProjects/saju/resources/ymd/"
-    ymd = YearMonthDate(db_path)
-    res = ymd.request(1990, 1, 1)
-    print(res)
+    # ymd = YearMonthDate(db_path)
+    # ymd.clear_old_db()
+    # res = ymd.request(1990, 1, 1)
+    # print(res)
     # start_date = date(1970, 1, 1)
     # end_date = date(2010, 12, 31)
     # ymd.dump_db(start_date, end_date)
