@@ -23,8 +23,16 @@ class DatabaseManager():
         for dir in dir_lst:
             if pathlib.Path(os.path.join(dir, "_SUCCESS_")).is_file():
                 self.df = pd.read_parquet(os.path.join(dir, "db.parquet"), engine='pyarrow')
-                self.latest_time = datetime.strptime(dir.split("/")[-1], '%Y%m%d%H%M').replace(tzinfo=timezone(self.TIMEZONE))
+                self.latest_time = datetime.strptime(dir.split("/")[-1] + "-+0900", '%Y%m%d%H%M-%z')
                 break
+
+    @classmethod
+    def load_latest_db(cls, db_path):
+        dir_lst = sorted(list(glob(os.path.join(db_path, "*"))), key= lambda abs_path: -int(abs_path.split("/")[-1]))
+        for dir in dir_lst:
+            if pathlib.Path(os.path.join(dir, "_SUCCESS_")).is_file():
+                return pd.read_parquet(os.path.join(dir, "db.parquet"), engine='pyarrow')
+        return None
 
     def save_parquet(self):
         now = datetime.now(timezone(self.TIMEZONE)).strftime("%Y%m%d%H%M")

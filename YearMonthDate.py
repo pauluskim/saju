@@ -1,4 +1,5 @@
 import logging
+import time
 
 import pandas as pd
 import xml.etree.ElementTree as ET
@@ -49,19 +50,24 @@ class YearMonthDate(DatabaseManager):
         return res
 
     def update_db(self, y, m, d):
-        params = {'solYear': str(y),
-                  'solMonth': '{0:02d}'.format(m),
-                  'solDay': '{0:02d}'.format(d),
-                  'serviceKey': 'jFMeIohmYEadE1u/G8l3gAtFkCfUcm1kSIQUj/cfFDaKIAT4HdAaDqo6xhuUou3Mg4MO4xScZCjY/MWDng2IJw=='}
+        for retry_cnt in range(3):
+            params = {'solYear': str(y),
+                      'solMonth': '{0:02d}'.format(m),
+                      'solDay': '{0:02d}'.format(d),
+                      'serviceKey': 'jFMeIohmYEadE1u/G8l3gAtFkCfUcm1kSIQUj/cfFDaKIAT4HdAaDqo6xhuUou3Mg4MO4xScZCjY/MWDng2IJw=='}
 
-        resp = requests.get(self.api_url, params=params)
-        content = resp.content
+            resp = requests.get(self.api_url, params=params)
+            content = resp.content
 
-        root = ET.fromstring(content)
+            root = ET.fromstring(content)
 
+            if len(list(root.iter('item'))) != 1:
+                logging.error("{}th try item list length is more than 1: {}/{}/{}".format(retry_cnt + 1, y, m, d))
+                time.sleep(5)
+            else:
+                break
         if len(list(root.iter('item'))) != 1:
-            logging.error("item list length is more than 1: {}/{}/{}".format(y, m, d))
-            raise ApiError("ITEM LIST MORE THAN 1")
+            raise ApiError("ITEM LIST MORE THAN 1: {}/{}/{}".format(y, m, d))
 
         new_row = {"y": y, "m": m, "d": d}
         for item in root.iter('item'):
@@ -91,9 +97,9 @@ class YearMonthDate(DatabaseManager):
 
 if __name__ == "__main__":
     db_path = "/Users/jack/PycharmProjects/saju/resources/ymd/"
-    # ymd = YearMonthDate(db_path)
+    ymd = YearMonthDate(db_path)
     # ymd.clear_old_db()
-    # res = ymd.request(1990, 1, 1)
+    res = ymd.request(1993, 10, 21)
     # print(res)
     # start_date = date(1970, 1, 1)
     # end_date = date(2010, 12, 31)

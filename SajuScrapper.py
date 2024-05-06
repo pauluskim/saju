@@ -4,10 +4,7 @@ from datetime import timedelta, datetime
 import pandas as pd
 import requests
 from pytz import timezone
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from tqdm import tqdm
-from webdriver_manager.chrome import ChromeDriverManager
 
 from DatabaseManager import DatabaseManager
 from HourChunganJiji import HourChunganJiji
@@ -22,6 +19,8 @@ class SajuScrapper(DatabaseManager):
         super(SajuScrapper, self).__init__(saju_db_path)
         self.ymd = YearMonthDate(ymd_db_path)
         self.hcj = HourChunganJiji(chungan_path, chogyeon_path)
+        self.nonhit = 0
+        self.total = 0
 
     def scrap(self, start, finish):
         def hourly_it(start, finish):
@@ -41,18 +40,25 @@ class SajuScrapper(DatabaseManager):
             key = f"{hour_gangi} {day_ganji} {month_ganji} {year_ganji}"
 
             self.request(key, iter_time.year, iter_time.month, iter_time.day, iter_time.hour)
-            if counter % 1000 == 0:
+            if counter % 100  == 0 and self.nonhit != 0:
+                print("\nDB size: {}".format(self.df.shape[0]))
+                print("non hit count: {}, total_count: {}".format(self.nonhit, self.total))
+                print("hit ratio: {:.4f}".format(100 - (1.0 * self.nonhit / self.total * 100)))
                 print("current date: " + iter_time.strftime("%Y%m%d%H%M"))
+                self.nonhit = 0
+                self.total = 0
+
             counter += 1
 
     def request(self, key, year, month, day, hour):
+        self.total += 1
         try:
             res = self.df.loc[self.df["key"] == key]
         except KeyError as e:
             print("Generate a new db!!!")
             res = self.update_db(key, year, month, day, hour)
         except ScrapError as e:
-            print("Scrapping Error")
+            print(f"Scrapping Error: {year}-{month}-{day}-{hour}")
             return
 
         if len(res.index) == 0:
@@ -60,6 +66,7 @@ class SajuScrapper(DatabaseManager):
         return res
 
     def update_db(self, key, year, month, day, hour):
+        self.nonhit += 1
         str_time = "{0}{1:02d}{2:02d}{3:02d}00".format(year, month, day, hour)
         headers = {
             'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -97,6 +104,6 @@ if __name__ == "__main__":
     chungan_path = "/Users/jack/PycharmProjects/saju/table/hour_chungan.yaml"
     chogyeon_path = "/Users/jack/PycharmProjects/saju/table/chogyeonpyo.yaml"
     scrapper = SajuScrapper(saju_db_path, ymd_db_path, chungan_path, chogyeon_path)
-    start = datetime(1990, 1, 1, 0)
-    finish = datetime(1993,12, 31, 11)
+    start = datetime(1996, 10, 22, 0)
+    finish = datetime(2000,12, 31, 23)
     scrapper.scrap(start, finish)
